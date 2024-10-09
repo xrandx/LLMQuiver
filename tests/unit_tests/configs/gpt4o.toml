@@ -1,4 +1,4 @@
-API_TYPE = "azure"
+API_TYPE = "azure_openai"
 API_BASE = "https://endpoint.openai.azure.com/"
 API_VERSION = "2023-05-15"
 API_KEY = "********************************"

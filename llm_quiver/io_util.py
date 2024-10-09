@@ -9,8 +9,8 @@ def write_text(text, dst):
         file.write(text)
 
 
-def read_text(dst):
-    with open(dst, 'r') as file:
+def read_text(src):
+    with open(src, 'r') as file:
         return file.read()
 
 
@@ -83,72 +83,3 @@ def read_file_lst(src, endswith=None):
     if endswith:
         filenames = filter(lambda x: x.endswith(endswith), filenames)
     return list(map(lambda x: os.path.join(src, x), filenames))
-
-
-class JSONObj(object):
-    def __init__(self, input_dict):
-        self._load_dict(input_dict)
-
-    def _load_dict(self, input_dict):
-        for key, value in input_dict.items():
-            if key.startswith('#'):
-                continue
-            if isinstance(value, (list, tuple)):
-                setattr(self, key, [JSONObj(item) if isinstance(item, dict) else item for item in value])
-            else:
-                setattr(self, key, JSONObj(value) if isinstance(value, dict) else value)
-
-    def merge_dict(self, new_dict):
-        for key, value in new_dict.items():
-            if key.startswith('#'):
-                continue
-            if hasattr(self, key):
-                if isinstance(value, dict):
-                    getattr(self, key).merge_dict(value)
-                else:
-                    setattr(self, key, value)
-            else:
-                self._load_dict({key: value})
-
-
-def todict(obj, classkey=None):
-    if isinstance(obj, dict):
-        data = {}
-        for (k, v) in obj.items():
-            data[k] = todict(v, classkey)
-        return data
-    elif hasattr(obj, '_ast'):
-        return todict(obj._ast())
-    elif hasattr(obj, '__iter__') and not isinstance(obj, str):
-        return [todict(v, classkey) for v in obj]
-    elif hasattr(obj, '__dict__'):
-        data = dict([
-            (key, todict(value, classkey))
-            for key, value in obj.__dict__.items()
-            if not callable(value) and not key.startswith('_')])
-        if classkey is not None and hasattr(obj, '__class__'):
-            data[classkey] = obj.__class__.__name__
-        return data
-    else:
-        return obj
-
-
-def md5sum(file_path):
-    import subprocess
-    result = subprocess.run(['md5sum', file_path], stdout=subprocess.PIPE)
-    return result.stdout.decode('utf-8').split()[0]
-
-
-def calculate_sha1(file_path):
-    import hashlib
-    sha1 = hashlib.sha1()
-    try:
-        with open(file_path, 'rb') as file:
-            while True:
-                data = file.read(8192)
-                if not data:
-                    break
-                sha1.update(data)
-        return sha1.hexdigest()
-    except FileNotFoundError:
-        return "File not found."
