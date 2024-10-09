@@ -1,4 +1,4 @@
-from llm_quiver.llm_quiver import LLMQuiver, TomlLLMQuiver, Jinja2LLMQuiver
+from llm_quiver import LLMQuiver, TomlLLMQuiver, Jinja2LLMQuiver
 from loguru import logger
 from dotenv import load_dotenv
 from pathlib import Path
