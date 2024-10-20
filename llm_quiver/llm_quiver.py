@@ -24,7 +24,7 @@ class LLMQuiver:
         else:
             raise ValueError(f"LLMQUIVER_CONFIG: {LLMQUIVER_CONFIG} is not found.")
 
-        keys = ["API_TYPE", "GPT_MODEL_NAME", "API_BASE", "API_KEY", "API_VERSION"]
+        keys = ["API_TYPE", "MODEL_NAME", "API_BASE", "API_KEY", "API_VERSION"]
         params = {}
         for key in keys:
             env_value = os.environ.get(key, None)
@@ -41,13 +41,13 @@ class LLMQuiver:
             api_base=params["API_BASE"],
             api_version=params["API_VERSION"],
             api_key=params["API_KEY"],
-            modelname=params["GPT_MODEL_NAME"],
+            modelname=params["MODEL_NAME"],
             temperature=config.get("temperature"),
             top_p=config.get("top_p", None),
             max_tokens=config.get("max_tokens"),
             enable_cache=config.get("enable_cache"),
             cache_dir=config.get("cache_dir"),
-            cache_prefix=config.get("cache_prefix", params["GPT_MODEL_NAME"]),
+            cache_prefix=config.get("cache_prefix", params["MODEL_NAME"]),
             cache_interval=config.get("cache_interval", 0),
         )
 
