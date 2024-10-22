@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llm-quiver"
-version = "0.3.3"
+version = "0.3.4"
 description = "The auxiliary tool is used to invoke the online LLM service API, supporting local caching, prompt rendering, and configuration management."
 authors = ["xrandx <kevtyle@hotmail.com>"]
 readme = "README.md"

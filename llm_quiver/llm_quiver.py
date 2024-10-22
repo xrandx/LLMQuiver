@@ -8,21 +8,47 @@ from jinja2 import Template
 
 
 class LLMQuiver:
-    def __init__(self) -> None:
-        self._initialize_by_env()
+    def __init__(self, config_path: str = None) -> None:
+        if config_path:
+            self._initialize_by_config(config_path)
+        else:
+            logger.info("config_path is not set. Try to initialize by environment variables.")
+            self._initialize_by_env()
+
         self.prompt_template = None
 
-    def _initialize_by_env(self):
-        LLMQUIVER_CONFIG = os.environ.get("LLMQUIVER_CONFIG", None)
-        if LLMQUIVER_CONFIG is None:
-            raise ValueError(f"LLMQUIVER_CONFIG is invalid: {LLMQUIVER_CONFIG}.")
-
-        LLMQUIVER_CONFIG = Path(LLMQUIVER_CONFIG)
-        if LLMQUIVER_CONFIG.exists():
-            logger.info(f"LLMQUIVER_CONFIG: {LLMQUIVER_CONFIG}")
-            config = io_util.read_toml(LLMQUIVER_CONFIG)
+    def read_config(self, config_path):
+        config_path = Path(config_path)
+        if config_path.exists():
+            logger.info(f"LLMQUIVER_CONFIG: {config_path}")
+            config = io_util.read_toml(config_path)
         else:
-            raise ValueError(f"LLMQUIVER_CONFIG: {LLMQUIVER_CONFIG} is not found.")
+            raise ValueError(f"LLMQUIVER_CONFIG: {config_path} is not found.")
+        return config
+
+    def _initialize_by_config(self, config_path: str = None):
+        config = self.read_config(config_path)
+        self.gen = WrapOpenAI(
+            api_type=config["API_TYPE"],
+            api_base=config["API_BASE"],
+            api_version=config["API_VERSION"],
+            api_key=config["API_KEY"],
+            modelname=config["MODEL_NAME"],
+            temperature=config.get("temperature"),
+            top_p=config.get("top_p", None),
+            max_tokens=config.get("max_tokens"),
+            enable_cache=config.get("enable_cache"),
+            cache_dir=config.get("cache_dir"),
+            cache_prefix=config.get("cache_prefix", config["MODEL_NAME"]),
+            cache_interval=config.get("cache_interval", 0),
+        )
+
+    def _initialize_by_env(self):
+        config_path = os.environ.get("LLMQUIVER_CONFIG", None)
+        if config_path is None:
+            raise ValueError(f"LLMQUIVER_CONFIG is invalid: {config_path}.")
+
+        config = self.read_config(config_path)
 
         keys = ["API_TYPE", "MODEL_NAME", "API_BASE", "API_KEY", "API_VERSION"]
         params = {}
@@ -34,7 +60,7 @@ class LLMQuiver:
             elif config_value and len(config_value) > 0:
                 params[key] = config_value
             else:
-                raise ValueError(f"Missing {key} in both the configuration file({LLMQUIVER_CONFIG}) and environment.")
+                raise ValueError(f"Missing {key} in both the configuration file({config_path}) and environment.")
 
         self.gen = WrapOpenAI(
             api_type=params["API_TYPE"],
@@ -76,7 +102,9 @@ class LLMQuiver:
     def render_prompt(self, prompt_value):
         return prompt_value
 
-    def generate_by_toml_template(self, prompts):
+    def generate_by_toml_template(
+        self, prompts, verbose=False
+    ):
         candidates = []
         cand_idx = []
         responses = [None] * len(prompts)
@@ -84,7 +112,7 @@ class LLMQuiver:
             cand_idx.append(i)
             candidates.append(prompt)
 
-        model_outs = self.gen.chatcomplete(prompts=prompts, verbose=True)
+        model_outs = self.gen.chatcomplete(prompts=prompts, verbose=verbose)
 
         for i, out in zip(cand_idx, model_outs):
             responses[i] = out
@@ -92,18 +120,19 @@ class LLMQuiver:
         return responses
 
     def generate(
-        self, prompt_values: List[Dict]
+        self, prompt_values: List[Dict], verbose=False
     ):
         prompts = self.prerpare_prompt(prompt_values)
-        return self.gen.chatcomplete(prompts=prompts, verbose=True)
+        return self.gen.chatcomplete(prompts=prompts, verbose=verbose)
 
 
 class Jinja2LLMQuiver(LLMQuiver):
     def __init__(
         self,
+        config_path=None,
         jinja2_template_file=None
     ):
-        super().__init__()
+        super().__init__(config_path)
 
         if jinja2_template_file is None:
             raise ValueError("jinja2_template_file is required for jinja2 template type.")
@@ -124,11 +153,11 @@ class Jinja2LLMQuiver(LLMQuiver):
 class TomlLLMQuiver(LLMQuiver):
     def __init__(
         self,
+        config_path=None,
         toml_template_file=None,
         toml_prompt_name=None
     ):
-
-        super().__init__()
+        super().__init__(config_path)
 
         if toml_template_file is None or toml_prompt_name is None:
             raise ValueError("toml_template_file is required for toml template type.")
