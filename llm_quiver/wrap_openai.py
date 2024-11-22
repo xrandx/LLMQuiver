@@ -1,4 +1,5 @@
 from openai import BadRequestError, APITimeoutError, RateLimitError
+import json
 import tiktoken
 from openai import AzureOpenAI, OpenAI
 import re
@@ -101,53 +102,47 @@ class WrapOpenAI:
         self.encoding_init_completed = True
 
     def _init_cache(self):
-        if self.enable_cache and self.cache_dir:
+        if self.enable_cache:
+            if not self.cache_dir:
+                raise ValueError("caching is enabled but no cache directory is provided. "
+                                 f"cache_dir's value: {self.cache_dir}")
+
             self.cache_dir = Path(self.cache_dir)
             self.cache_dir.mkdir(exist_ok=True, parents=True)
             if self.cache_prefix:
                 cache_prefix = self.cache_prefix
             else:
                 if self.modelname:
-                    cache_prefix = "-".join(self.modelname.split("-")[:2])
+                    cache_prefix = self.modelname
                 else:
                     cache_prefix = "default"
 
             cache_path = self.cache_dir / f"{cache_prefix}.cache"
             self.gpt_cache = CacheManager(cache_path, backup_interval=self.cache_interval)
 
-    def infer(self, prompt):
+    def infer(self, messages):
+        logger.debug(f"messages: {messages}")
         response = self._client.chat.completions.create(
             model=self.modelname,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             top_p=self.top_p,
             timeout=self.timeout,
-            messages=[
-                {"role": "system", "content": prompt},
-            ]
+            messages=messages
         )
+        return parse_response(response)
 
-        if response is not None \
-           and hasattr(response, "choices") \
-           and len(response.choices) > 0 \
-           and hasattr(response.choices[0], "message") \
-           and hasattr(response.choices[0].message, "content"):
-
-            response = response.choices[0].message.content
-
-        return response
-
-    def repeat_complete(self, complete_fn, prompt, sleep_eps=60, max_retry=3, every_step_sleep=0):
+    def complete_with_retry(self, messages, sleep_eps=60, max_retry=3, every_step_sleep=0):
         resp = None
 
         for _ in range(max_retry):
             try:
-                resp = complete_fn(prompt)
+                resp = self.infer(messages)
                 time.sleep(every_step_sleep)
                 break
             except BadRequestError as e:
                 logger.warning(f"BadRequestError: {repr(e)}")
-                logger.warning(f"{prompt}")
+                logger.warning(f"{messages}")
                 break
             except APITimeoutError as e:
                 logger.warning(f"APITimeoutError: {repr(e)}，delay {sleep_eps}s and retry.")
@@ -179,31 +174,42 @@ class WrapOpenAI:
         num_tokens = len(self.encoding.encode(string))
         return num_tokens
 
-    def chatcomplete(self, prompts, verbose=False):
-        responses = [None] * len(prompts)
+    def chatcomplete(self, messages_list, verbose=False):
+        responses = [None] * len(messages_list)
 
         if verbose:
-            prompts = tqdm(prompts)
+            messages_list = tqdm(messages_list)
 
         if self.enable_cache:
-            for idx, prompt in enumerate(prompts):
-                response = self.gpt_cache.get_item(prompt)
-                if response is not None:
+            for idx, messages in enumerate(messages_list):
+                messages_key = json.dumps(messages)
+                response = self.gpt_cache.get_item(messages_key)
+                if response is not None and len(response) > 0:
                     responses[idx] = response
 
-        for idx, (prompt, cached_response) in enumerate(zip(prompts, responses)):
-            logger.debug(f"## input\n{prompt}")
+        for idx, (messages, cached_response) in enumerate(zip(messages_list, responses)):
+            logger.debug(f"## input\n{messages}")
             if cached_response is not None:
                 logger.debug(f"## response(cached)\n{cached_response}")
             else:
-                response = self.repeat_complete(self.infer, prompt, sleep_eps=10, max_retry=300, every_step_sleep=2)
+                response = self.complete_with_retry(messages, sleep_eps=10, max_retry=300, every_step_sleep=2)
 
                 if response is not None:
                     logger.debug(f"## response(new)\n{response}")
                     responses[idx] = response
                     if self.enable_cache:
-                        self.gpt_cache.set_item(key=prompt, value=response)
+                        messages_key = json.dumps(messages)
+                        self.gpt_cache.set_item(key=messages_key, value=response)
                 else:
                     logger.debug("## response(new)\nNone")
 
         return responses
+
+
+def parse_response(response):
+    """解析API响应"""
+    try:
+        return response.choices[0].message.content
+    except (AttributeError, IndexError):
+        logger.error("Invalid response format")
+        return None
