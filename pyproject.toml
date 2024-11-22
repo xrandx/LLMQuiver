@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "llm-quiver"
+version = "0.3.6"
+description = "The auxiliary tool is used to invoke the online LLM service API, supporting local caching, prompt rendering, and configuration management."
+authors = ["xrandx <kevtyle@hotmail.com>"]
+readme = "README.md"
+package-mode = true 
+packages = [{ include = "llm_quiver" }]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+loguru = "^0.7.0"
+tqdm = "^4.66.0"
+openai = "^1.28.0"
+tiktoken = "0.7.0"
+toml = "^0.10.2"
+pyyaml = "^6.0.2"
+
+[tool.poetry.group.dev.dependencies]
+python-dotenv = "^1.0.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+
+[[tool.poetry.source]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+priority = "primary"
