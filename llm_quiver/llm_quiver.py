@@ -3,9 +3,8 @@ from . import io_util
 from .wrap_openai import WrapOpenAI
 from loguru import logger
 from pathlib import Path
-from copy import deepcopy
 import os
-from . import prompt_template_parser
+from .prompt import prompt_template_parser
 
 
 class BaseLLMQuiver:
@@ -17,7 +16,7 @@ class BaseLLMQuiver:
             self._initialize_by_env()
 
         self.prompt_template = None
-        self.enable_chat_template = False
+        self.prompt_template_type = "basic"
 
     def read_config(self, config_path):
         config_path = Path(config_path)
@@ -88,7 +87,7 @@ class BaseLLMQuiver:
     def render_prompt(self, prompt_value):
         return NotImplemented
 
-    def prerpare_prompts(self, prompt_values):
+    def prepare_prompts(self, prompt_values):
         return NotImplemented
 
     def generate(
@@ -109,7 +108,7 @@ class LLMQuiver(BaseLLMQuiver):
     def __init__(self, config_path: str = None) -> None:
         super().__init__(config_path)
 
-    def prerpare_prompts(self, prompt_values):
+    def prepare_prompts(self, prompt_values):
         if not isinstance(prompt_values, list):
             raise TypeError("prompt_values must be a list.")
 
@@ -130,9 +129,7 @@ class LLMQuiver(BaseLLMQuiver):
             "The generate() method is deprecated and will be removed in a future version. "
             "Please use chat() instead."
         )
-        if self.enable_chat_template:
-            raise RuntimeError("Can't enable generate, because the template is for chat.")
-        messages_list = self.prerpare_prompts(prompt_values)
+        messages_list = self.prepare_prompts(prompt_values)
         return self.gen.chatcomplete(messages_list=messages_list, verbose=verbose)
 
     def chat(
@@ -156,38 +153,36 @@ class TomlLLMQuiver(BaseLLMQuiver):
             raise ValueError("toml_prompt_name is required for toml template type.")
 
         toml_template_file = Path(toml_template_file)
-        logger.info(f"basic_toml_file: {toml_template_file}, basic_prompt_name: {toml_prompt_name}")
-
         if not toml_template_file.exists():
             raise ValueError(f"toml_template_file: {toml_template_file} is not found.")
 
+        logger.info(f"toml_file: {toml_template_file}, prompt_name: {toml_prompt_name}")
+
         prompt_templ_map = io_util.read_toml(toml_template_file)
+        if 'type' not in prompt_templ_map:
+            raise ValueError("Can't find the 'type' of the template.")
+
         if toml_prompt_name not in prompt_templ_map:
             raise ValueError(f"Can't find a template named '{toml_prompt_name}'.")
 
         self.prompt_template = prompt_templ_map[toml_prompt_name]
-
-        if isinstance(self.prompt_template, list):
-            #   reaed prompt template from list
-            self.enable_chat_template = True
+        self.prompt_template_type = prompt_templ_map['type']
+        if self.prompt_template_type == "basic":
+            logger.info("Detect prompt_template is for basic")
+            self.prompt_template = prompt_template_parser.PromptTemplateParser(
+                template=self.prompt_template)
+        elif self.prompt_template_type == "chat":
             logger.info("Detect prompt_template is for chat")
-            self.varname_idx_map = dict()
-            validation_prompt_varnames = set()
             for msg_id, msg in enumerate(self.prompt_template):
-                varnames = prompt_template_parser.extract_variable_names(msg["content"])
-                add_varname_flag = False
-                for v in varnames:
-                    if len(v) > 0:
-                        if v in validation_prompt_varnames:
-                            raise ValueError(f"Duplicate prompt variable name: {v}")
-                        self.varname_idx_map[v] = msg_id
-                        add_varname_flag = True
-                        validation_prompt_varnames.add(v)
+                msg["content"] = prompt_template_parser.PromptTemplateParser(template=msg["content"])
+        else:
+            raise ValueError(
+                f"Unsupported prompt template type: {self.prompt_template_type}. "
+                "Supported types are 'basic' and 'chat'."
+            )
+        logger.debug(f"Initialized prompt template of type '{self.prompt_template_type}'")
 
-                if add_varname_flag:
-                    msg["content"] = prompt_template_parser.remove_template_variables(text=msg["content"])
-
-    def prerpare_prompts(self, prompt_values: List[Dict]):
+    def prepare_prompts(self, prompt_values: List[Dict]):
         if not isinstance(prompt_values, list):
             raise TypeError("prompt_values must be a list.")
 
@@ -197,20 +192,19 @@ class TomlLLMQuiver(BaseLLMQuiver):
         if not isinstance(prompt_values[0], dict):
             raise TypeError("TomlLLMQuiver's prompt_values must be a list of dict.")
 
-        prompts = [self.prompt_template.format_map(p) for p in prompt_values]
+        prompts = [self.prompt_template.format(p) for p in prompt_values]
         messages_list = [[dict(role="system", content=p)] for p in prompts]
         return messages_list
 
     def prepare_messages_list(self, prompt_values: List[Dict]):
         messages_list = []
         for prompt_value in prompt_values:
-            messages = deepcopy(self.prompt_template)
-            for p_key in prompt_value:
-                if p_key in self.varname_idx_map:
-                    temp = messages[self.varname_idx_map[p_key]]
-                    temp["content"] = temp["content"].format_map(prompt_value)
-                else:
-                    raise ValueError(f"Can't find a prompt variable named '{p_key}'.")
+            messages = []
+            for msg_templ in self.prompt_template:
+                messages.append(dict(
+                    role=msg_templ['role'],
+                    content=msg_templ["content"].format(prompt_value)
+                ))
             messages_list.append(messages)
         return messages_list
 
@@ -221,9 +215,9 @@ class TomlLLMQuiver(BaseLLMQuiver):
             "The generate() method is deprecated and will be removed in a future version. "
             "Please use chat() instead."
         )
-        if self.enable_chat_template:
-            raise RuntimeError("Can't enable generate, because the template is for chat.")
-        messages_list = self.prerpare_prompts(prompt_values)
+        if self.prompt_template_type != "basic":
+            raise RuntimeError("Can't enable generate, because the template is not for 'basic'.")
+        messages_list = self.prepare_prompts(prompt_values)
         return self.gen.chatcomplete(messages_list=messages_list, verbose=verbose)
 
     def chat(
