@@ -1,1 +1,2 @@
-hello_world_template = '''Hello, {name}, How are you doing?'''
+type = 'basic'
+hello_world_template = '''Hello, {{name}}, How are you doing?'''
