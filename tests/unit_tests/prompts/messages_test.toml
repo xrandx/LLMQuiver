@@ -1,3 +1,5 @@
+type = 'chat'
+
 #   inspired by 李继刚
 
 [[joke_template]]
