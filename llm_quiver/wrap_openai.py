@@ -10,6 +10,7 @@ from loguru import logger
 from typing import Optional
 from .support_api import SupportAPI
 from .cache_manager import CacheManager
+import httpx
 
 
 class WrapOpenAI:
@@ -27,7 +28,9 @@ class WrapOpenAI:
         enable_cache: bool = False,
         cache_dir: Optional[str] = None,
         cache_prefix: Optional[str] = None,
-        cache_interval: int = 0
+        cache_interval: int = 0,
+        http_proxy: Optional[str] = None,
+        https_proxy: Optional[str] = None
     ):
         try:
             self.api_type = SupportAPI(api_type)
@@ -46,18 +49,28 @@ class WrapOpenAI:
         self.cache_dir = cache_dir
         self.cache_prefix = cache_prefix
         self.cache_interval = cache_interval
+        self.http_proxy = http_proxy
+        self.https_proxy = https_proxy
 
         if self.api_type == SupportAPI.AzureOpenAI:
             self._client = AzureOpenAI(
                 api_version=self.api_version,
                 azure_endpoint=self.api_base,
                 api_key=self.api_key,
+                http_client=httpx.Client(proxies={
+                    "http://": self.http_proxy,
+                    "https://": self.https_proxy
+                } if self.http_proxy or self.https_proxy else None)
             )
         elif self.api_type in [SupportAPI.OpenAI, SupportAPI.OpenAILike]:
             #   "openai" or "openai_like"
             self._client = OpenAI(
                 base_url=self.api_base,
                 api_key=self.api_key,
+                http_client=httpx.Client(proxies={
+                    "http://": self.http_proxy,
+                    "https://": self.https_proxy
+                } if self.http_proxy or self.https_proxy else None)
             )
 
         self._log_format_parameters()
@@ -121,7 +134,6 @@ class WrapOpenAI:
             self.gpt_cache = CacheManager(cache_path, backup_interval=self.cache_interval)
 
     def infer(self, messages):
-        logger.debug(f"messages: {messages}")
         response = self._client.chat.completions.create(
             model=self.modelname,
             max_tokens=self.max_tokens,
@@ -188,7 +200,11 @@ class WrapOpenAI:
                     responses[idx] = response
 
         for idx, (messages, cached_response) in enumerate(zip(messages_list, responses)):
-            logger.debug(f"## input\n{messages}")
+            logger.debug("## input")
+            for msg in messages:
+                for k, v in msg.items():
+                    logger.debug(f"{k}: {v}")
+
             if cached_response is not None:
                 logger.debug(f"## response(cached)\n{cached_response}")
             else:
@@ -209,6 +225,9 @@ class WrapOpenAI:
 def parse_response(response):
     """解析API响应"""
     try:
+        if hasattr(response.choices[0].message, "reasoning_content"):
+            logger.debug(f"推理过程: {response.choices[0].message.reasoning_content}")
+
         return response.choices[0].message.content
     except (AttributeError, IndexError):
         logger.error("Invalid response format")

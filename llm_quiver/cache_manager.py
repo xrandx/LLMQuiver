@@ -10,7 +10,8 @@ class CacheManager:
         logger.info(f"Cache is in: {cache_path}")
         self.cache_path = Path(cache_path)
         is_first_run = not self.cache_path.exists()
-        self.conn = sqlite3.connect(cache_path)
+        self.cache_path.parent.mkdir(exist_ok=True, parents=True)
+        self.conn = sqlite3.connect(self.cache_path)
         self.conn.execute('PRAGMA journal_mode=WAL')
         self.cursor = self.conn.cursor()
         if is_first_run:
@@ -108,11 +109,8 @@ class CacheManager:
         self.conn.commit()
 
     def update(self, key, value):
-        self.set(key, value)  # Reuse set method with conflict update logic
+        self.set_item(key, value)  # Reuse set method with conflict update logic
 
     def close(self):
         self.backup_cache()
         self.conn.close()
-
-    def __del__(self):
-        self.close()
