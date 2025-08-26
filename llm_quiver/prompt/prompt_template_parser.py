@@ -2,9 +2,9 @@
 import re
 from typing import Mapping
 
-REGEX = re.compile(r"\{\{([a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]{0,29}|#histories#|#query#|#context#)\}\}")
+REGEX = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]{0,29}|#histories#|#query#|#context#)\}\}")
 WITH_VARIABLE_TMPL_REGEX = re.compile(
-    r"\{\{([a-zA-Z_\u4e00-\u9fa5][a-zA-Z0-9_\u4e00-\u9fa5]{0,29}|#[a-zA-Z0-9_]{1,50}\.[a-zA-Z0-9_\.]{1,100}#|#histories#|#query#|#context#)\}\}"
+    r"\{\{([a-zA-Z_][a-zA-Z0-9_]{0,29}|#[a-zA-Z0-9_]{1,50}\.[a-zA-Z0-9_\.]{1,100}#|#histories#|#query#|#context#)\}\}"
 )
 
 
@@ -45,3 +45,22 @@ class PromptTemplateParser:
     @classmethod
     def remove_template_variables(cls, text: str, with_variable_tmpl: bool = False):
         return re.sub(WITH_VARIABLE_TMPL_REGEX if with_variable_tmpl else REGEX, r"{\1}", text)
+
+
+if __name__ == "__main__":
+    test_templ = """
+test {{conten}}
+
+{
+    "in": "garbage1",
+    "out": "garbage2",
+}
+    """
+
+    template_parser = PromptTemplateParser(template=test_templ, with_variable_tmpl=False)
+    res = template_parser.format(dict(
+        content="shit",
+        json="test"
+    ))
+
+    print(res)

@@ -10,8 +10,7 @@ class CacheManager:
         logger.info(f"Cache is in: {cache_path}")
         self.cache_path = Path(cache_path)
         is_first_run = not self.cache_path.exists()
-        self.cache_path.parent.mkdir(exist_ok=True, parents=True)
-        self.conn = sqlite3.connect(self.cache_path)
+        self.conn = sqlite3.connect(cache_path)
         self.conn.execute('PRAGMA journal_mode=WAL')
         self.cursor = self.conn.cursor()
         if is_first_run:

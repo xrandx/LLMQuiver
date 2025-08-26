@@ -42,8 +42,6 @@ class BaseLLMQuiver:
             cache_dir=config.get("cache_dir"),
             cache_prefix=config.get("cache_prefix", config["MODEL_NAME"]),
             cache_interval=config.get("cache_interval", 0),
-            http_proxy=config.get("http_proxy"),
-            https_proxy=config.get("https_proxy")
         )
 
     def _initialize_by_env(self):
@@ -78,8 +76,6 @@ class BaseLLMQuiver:
             cache_dir=config.get("cache_dir"),
             cache_prefix=config.get("cache_prefix", params["MODEL_NAME"]),
             cache_interval=config.get("cache_interval", 0),
-            http_proxy=config.get("http_proxy"),
-            https_proxy=config.get("https_proxy"),
         )
 
     def get_num_tokens_from_string_fn(self):
@@ -184,7 +180,7 @@ class TomlLLMQuiver(BaseLLMQuiver):
                 f"Unsupported prompt template type: {self.prompt_template_type}. "
                 "Supported types are 'basic' and 'chat'."
             )
-        # logger.warning(f"self.prompt_template: {self.prompt_template}")
+        logger.warning(f"self.prompt_template: {self.prompt_template}")
         logger.debug(f"Initialized prompt template of type '{self.prompt_template_type}'")
 
     def prepare_prompts(self, prompt_values: List[Dict]):
