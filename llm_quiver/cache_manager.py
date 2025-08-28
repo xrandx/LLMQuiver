@@ -108,11 +108,8 @@ class CacheManager:
         self.conn.commit()
 
     def update(self, key, value):
-        self.set(key, value)  # Reuse set method with conflict update logic
+        self.set_item(key, value)  # Reuse set method with conflict update logic
 
     def close(self):
         self.backup_cache()
         self.conn.close()
-
-    def __del__(self):
-        self.close()

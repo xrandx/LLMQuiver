@@ -168,11 +168,11 @@ class TomlLLMQuiver(BaseLLMQuiver):
         self.prompt_template = prompt_templ_map[toml_prompt_name]
         self.prompt_template_type = prompt_templ_map['type']
         if self.prompt_template_type == "basic":
-            logger.info("Detect prompt_template is for basic")
+            logger.info(f"Detect {toml_template_file} is for basic")
             self.prompt_template = prompt_template_parser.PromptTemplateParser(
                 template=self.prompt_template)
         elif self.prompt_template_type == "chat":
-            logger.info("Detect prompt_template is for chat")
+            logger.info(f"Detect {toml_template_file} is for chat")
             for msg_id, msg in enumerate(self.prompt_template):
                 msg["content"] = prompt_template_parser.PromptTemplateParser(template=msg["content"])
         else:
@@ -180,6 +180,7 @@ class TomlLLMQuiver(BaseLLMQuiver):
                 f"Unsupported prompt template type: {self.prompt_template_type}. "
                 "Supported types are 'basic' and 'chat'."
             )
+        logger.warning(f"self.prompt_template: {self.prompt_template}")
         logger.debug(f"Initialized prompt template of type '{self.prompt_template_type}'")
 
     def prepare_prompts(self, prompt_values: List[Dict]):

@@ -209,6 +209,12 @@ class WrapOpenAI:
 def parse_response(response):
     """解析API响应"""
     try:
+        if hasattr(response.choices[0].message, "reasoning_content"):
+            logger.debug(f"推理过程: {response.choices[0].message.reasoning_content}")
+        else:
+            logger.debug("推理过程: reasoning_content 属性不存在")
+            # 记录属性不存在的情况
+
         return response.choices[0].message.content
     except (AttributeError, IndexError):
         logger.error("Invalid response format")
